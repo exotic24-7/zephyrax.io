@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Zephyrax.io</title>
+    <meta charset="utf-8" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap" rel="stylesheet">
+    <style>
+        :root{
+            --bg-1: #08131a;
+            --bg-2: #0f2a2a;
+            --accent: #7ee07a;
+            --accent-2: #52b94d;
+            --muted: rgba(255,255,255,0.85);
+            --glass: rgba(255,255,255,0.06);
+            --panel: rgba(255,255,255,0.04);
+            --card-border: rgba(255,255,255,0.06);
+        }
+        html,body{height:100%;margin:0;font-family:Inter, Arial, Helvetica, sans-serif;background:var(--bg-1);color:var(--muted);-webkit-font-smoothing:antialiased;overflow:hidden}
+
+        /* full-viewport layout */
+        #container{height:100%;display:flex;align-items:center;justify-content:center;position:relative;padding:20px;box-sizing:border-box;}
+        /* make canvas responsive so it doesn't force page width */
+        canvas{ display:none; border-radius:14px; box-shadow: 0 20px 40px rgba(0,0,0,0.45); background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.06)); max-width:calc(100vw - 40px); width:100%; height:auto; }
+
+        /* soft ambient backdrop */
+        body::before{
+            content:'';position:fixed;inset:0;z-index:-1;background:radial-gradient(800px 400px at 10% 20%, rgba(123,201,111,0.12), transparent 8%), radial-gradient(600px 300px at 90% 80%, rgba(94,170,255,0.06), transparent 10%), linear-gradient(180deg, #072025 0%, #051219 60%);
+        }
+
+        /* Start screen - centered frosted card */
+        #startScreen{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;padding:24px}
+        #startScreen .card{background:linear-gradient(180deg, rgba(255,255,255,0.03), rgba(0,0,0,0.06));border-radius:16px;padding:36px 40px;box-shadow:0 24px 48px rgba(0,0,0,0.6);border:1px solid var(--card-border);width:min(520px,92vw);box-sizing:border-box;text-align:center}
+        .title{font-size:56px;font-weight:900;margin:0 0 6px;color:#fff;letter-spacing:1px}
+        .subtitle{margin-bottom:20px;font-weight:600;color:rgba(255,255,255,0.85)}
+        .play-row{display:flex;align-items:center;gap:12px;justify-content:center}
+        input[type="text"]{padding:12px 14px;width:360px;border-radius:10px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.03);color:#fff;font-weight:600}
+        button.play{background:linear-gradient(180deg,var(--accent),var(--accent-2));color:#083214;border:none;padding:12px 20px;border-radius:12px;font-weight:900;cursor:pointer;box-shadow:0 8px 0 rgba(0,0,0,0.35)}
+
+        .info-line{margin-top:18px;opacity:0.9;font-size:14px}
+
+        /* Corner quick buttons (bottom-left) - glassy pills */
+        #cornerButtons{position:fixed;left:18px;bottom:18px;display:flex;flex-direction:column;gap:12px;align-items:flex-start;z-index:40}
+        .quick-btn{width:56px;height:56px;border-radius:12px;display:flex;align-items:center;justify-content:center;cursor:pointer;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.06));backdrop-filter: blur(6px);border:1px solid var(--card-border);box-shadow:0 10px 24px rgba(0,0,0,0.45);position:relative}
+        .quick-btn svg{width:42px;height:42px}
+        .btn-letter{ position:absolute; right:6px; bottom:6px; font-weight:800; color:rgba(255,255,255,0.9); font-size:11px; pointer-events:none }
+        .btn-inv{ background:linear-gradient(180deg,#1e88ff22,#1e88ff11); }
+        .btn-craft{ background:linear-gradient(180deg,#f39c1222,#f39c120f); }
+        .btn-seen{ background:linear-gradient(180deg,#f2c94c22,#f2c94c11); }
+        /* Top-left settings (small) */
+        #topSettingsBtn{position:fixed;left:18px;top:18px;z-index:40}
+        #topSettingsBtn .quick-btn{width:46px;height:46px;border-radius:10px}
+
+        /* Animated modal base */
+        #settingsModal, #inventoryModal, #seenModal{position:fixed;visibility:hidden;opacity:0;transform:translateY(8px);pointer-events:none;transition:all .18s ease;border-radius:12px}
+        #inventoryModal.open, #seenModal.open, #settingsModal.open{visibility:visible;opacity:1;transform:translateY(0);pointer-events:auto}
+        /* Settings modal */
+        #settingsModal{left:76px;top:18px;width:260px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.06));padding:12px;border:1px solid var(--card-border);color:var(--muted)}
+
+        /* Inventory modal */
+        #inventoryModal{left:18px;bottom:18px;width:420px;height:500px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.06));border:1px solid var(--card-border);padding:12px;box-sizing:border-box}
+        #inventoryModal h3{margin:6px 0 8px 0;font-size:18px;color:#fff}
+        #invGrid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;padding:8px}
+        .inv-item{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.06));height:64px;border-radius:10px;display:flex;align-items:center;justify-content:center;border:1px solid var(--card-border)}
+
+        /* Seen modal */
+        #seenModal{left:18px;bottom:18px;width:420px;height:500px;color:#111}
+
+        .modal-close{width:34px;height:34px;border-radius:10px;background:linear-gradient(180deg,#ff8b9b,#e05555);color:#fff;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
+        /* main equip slot (white with black outline) */
+        #mainRow .slot{width:48px;height:48px;border-radius:8px;background:#ffffff;color:#000;display:flex;align-items:center;justify-content:center;border:2px solid #000;font-weight:700;position:relative}
+        /* label inside slot for key number */
+        #mainRow .slot .slot-label, #swapEquip .slot .slot-label{position:absolute;right:4px;bottom:2px;font-size:11px;color:#000;font-weight:800;opacity:0.9}
+        /* swap equip row (smaller slots under main equip) */
+        #swapEquip{margin-top:8px;display:flex;gap:8px;align-items:center;justify-content:center}
+        #swapEquip .slot{width:40px;height:40px;border-radius:6px;background:#ffffff;color:#000;display:flex;align-items:center;justify-content:center;border:2px solid #000;font-weight:700;position:relative}
+        /* selected visual */
+        .slot.selected{box-shadow:0 0 0 4px rgba(126,224,122,0.18);transform:translateY(-2px)}
+
+                /* petal display slot */
+                .petal-slot {
+                    width: 56px;
+                    height: 56px;
+                    background: linear-gradient(#3b3b3b, #222);
+                    border-radius: 10px;
+                    box-shadow:
+                        inset 0 2px 0 #555,
+                        inset 0 -2px 0 #111,
+                        0 3px 0 #000;
+                }
+
+        /* Craft panel - refined */
+        #craftPanel{position:fixed;right:18px;top:50%;transform:translateY(-50%);width:360px;background:linear-gradient(180deg, rgba(255,255,255,0.03), rgba(0,0,0,0.06));border-radius:16px;padding:14px;border:1px solid var(--card-border);box-shadow:0 30px 60px rgba(0,0,0,0.5);}
+        .craft-header{font-size:20px;font-weight:900;color:#fff;text-align:center;position:relative}
+        #closeCraft{position:absolute;right:8px;top:8px;background:transparent;border:none;color:#fff;font-weight:800}
+        #craftSlots{margin:14px auto;display:grid;grid-template-columns:repeat(3,66px);grid-template-rows:repeat(3,66px);gap:10px;justify-content:center}
+        .craft-slot{border-radius:10px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.06));border:1px solid var(--card-border);display:flex;align-items:center;justify-content:center}
+        .craft-slot:nth-child(1){grid-column:2;grid-row:1}
+        .craft-slot:nth-child(2){grid-column:1;grid-row:2}
+        .craft-slot:nth-child(3){grid-column:2;grid-row:2}
+        .craft-slot:nth-child(4){grid-column:3;grid-row:2}
+        .craft-slot:nth-child(5){grid-column:2;grid-row:3}
+        #craftButton{width:100%;background:linear-gradient(180deg,var(--accent),var(--accent-2));border-radius:12px;border:none;padding:10px;font-size:15px;font-weight:900;color:#083214}
+        #craftButton:disabled{opacity:0.45;filter:grayscale(0.6)}
+        .craft-info{font-size:13px;color:rgba(255,255,255,0.9);text-align:center;margin-top:8px}
+        #inventory{display:grid;grid-template-columns:repeat(8,40px);gap:8px;justify-content:center;margin-top:10px}
+        .inv-slot{height:40px;border-radius:8px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.04));border:1px solid var(--card-border)}
+
+        /* HOTBAR (viewport-anchored root appended at end of <body>) */
+        #HOTBAR_ROOT{position:fixed;inset:0;pointer-events:none;z-index:999999}
+        #hotbar{position:absolute;left:50vw;transform:translateX(-50%);bottom:28px;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:auto}
+        #hotbar .hotbar-row{display:flex;gap:8px;align-items:center;justify-content:center}
+        #hotbar .hotbar-row.small .hotbar-slot{width:44px;height:44px;border-radius:8px}
+        .hotbar-slot{width:56px;height:56px;border-radius:10px;background:linear-gradient(#ffffff,#e9e9e9);box-shadow:0 6px 18px rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;border:2px solid #000;color:#000;font-weight:800;position:relative;cursor:pointer}
+        .hotbar-slot.selected{box-shadow:0 0 0 6px rgba(126,224,122,0.12);transform:translateY(-3px)}
+        .hotbar-slot .hot-label{position:absolute;right:6px;bottom:4px;font-size:12px;font-weight:900;color:#000}
+    </style>
+</head>
+<body>
+    <div id="container">
+        <canvas id="gameCanvas" width="1200" height="700"></canvas>
+    </div>
+
+    <div id="startScreen">
+        <div class="card">
+            <div class="title">Zephyrax.io</div>
+            <div class="subtitle">This pretty flower is called...</div>
+            <div class="play-row">
+                <input id="playerName" type="text" placeholder="Enter name" />
+                <button id="playBtn" class="play">Play</button>
+            </div>
+            <div style="height:18px"></div>
+            <div class="info-line">Press <strong>X</strong> for Inventory • <strong>C</strong> for Crafting • <strong>V</strong> for Seen Mobs</div>
+            <!-- main equip UI removed from start screen; hotbar is viewport-anchored and created at runtime -->
+        </div>
+    </div>
+
+    <div id="cornerButtons">
+        <div id="btnInventory" class="quick-btn btn-inv" title="Inventory (X)">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <rect x="3" y="5" width="18" height="14" rx="2" fill="#FFFFFF" />
+                <rect x="7" y="9" width="10" height="6" rx="1" fill="#1f7a2a" />
+            </svg>
+            <div class="fallback">X</div>
+            <span class="btn-letter">X</span>
+        </div>
+        <div id="btnCraft" class="quick-btn btn-craft" title="Craft (C)">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M2 21l5-5" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                <path d="M7 14L11 10" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                <path d="M14 3l7 7" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                <rect x="11" y="6" width="6" height="6" rx="1" fill="#FFFFFF" />
+            </svg>
+            <div class="fallback">C</div>
+            <span class="btn-letter">C</span>
+        </div>
+        <div id="btnSeen" class="quick-btn btn-seen" title="Seen Mobs (V)">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" fill="#FFFFFF" />
+                <circle cx="12" cy="12" r="3" fill="#1f7a2a" />
+            </svg>
+            <div class="fallback">V</div>
+            <span class="btn-letter">V</span>
+        </div>
+    </div>
+
+    <div id="topSettingsBtn" style="position:fixed;left:12px;top:12px;">
+        <div id="btnSettings" class="quick-btn" title="Settings"><span class="q-label">⚙</span></div>
+    </div>
+
+    <div id="settingsModal">
+        <div class="settings-list">
+            <div class="settings-item">1</div>
+            <div class="settings-item">2</div>
+            <div class="settings-item">3</div>
+            <div class="settings-item">4</div>
+            <div class="settings-item">5</div>
+            <div class="settings-item">6</div>
+            <div class="settings-item">7</div>
+            <div class="settings-item">8</div>
+        </div>
+        <div style="margin-top:8px;display:flex;gap:8px;align-items:center;justify-content:space-between">
+            <div>
+                <button id="connectServerBtn">Connect Server</button>
+                <span id="wsStatus" style="margin-left:8px;color:#fff;font-weight:700">offline</span>
+            </div>
+            <div style="text-align:right"><button id="closeSettings">Close</button></div>
+        </div>
+    </div>
+
+    <div id="inventoryModal">
+        <div class="titlebar"><div style="width:20px"></div><h3>Inventory</h3><div id="closeInv" class="modal-close">X</div></div>
+        <div style="margin:8px 0;display:flex;gap:8px">
+            <input id="invSearch" placeholder="Search..." style="flex:1;padding:8px;border-radius:6px;border:2px solid rgba(0,0,0,0.12)" />
+            <select id="invSort" style="width:88px;padding:6px;border-radius:6px"><option value="type">Type</option><option value="rarity">Rarity</option></select>
+        </div>
+        <div id="invGrid" style="height:440px;overflow:auto;padding:6px;background:transparent;border-radius:4px">
+            <!-- items rendered here -->
+        </div>
+        <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
+            <div style="width:64px;height:64px;background:rgba(255,255,255,0.1);border-radius:8px;display:flex;align-items:center;justify-content:center">E</div>
+            <div style="flex:1;color:#eaf6ff;font-size:13px">Click an item to equip into free slots. Click equipped to unequip.</div>
+        </div>
+    </div>
+
+    <!-- legacy craft modal removed; use #craftPanel instead -->
+
+    <div id="seenModal">
+        <div class="titlebar"><div style="width:20px"></div><h3>Mob Gallery</h3><div id="closeSeen" class="modal-close">X</div></div>
+        <div id="seenContent" style="max-height:420px;overflow:auto;display:grid;grid-template-columns:repeat(2,1fr);gap:8px;padding:6px;margin-top:6px">
+            <!-- gallery entries -->
+        </div>
+    </div>
+
+        <!-- Simple craft panel (alternate UI snippet provided by user) -->
+        <div id="craftPanel" hidden>
+            <div class="craft-header">
+                <span>Craft</span>
+                <button id="closeCraft">✕</button>
+            </div>
+
+            <div id="craftSlots">
+                <div class="craft-slot"></div>
+                <div class="craft-slot"></div>
+                <div class="craft-slot"></div>
+                <div class="craft-slot"></div>
+                <div class="craft-slot"></div>
+            </div>
+
+            <button id="craftButton" disabled>
+                Craft
+                <div class="chance">?% success chance</div>
+            </button>
+
+            <div class="craft-info">
+                Combine 5 of the same petal to craft an upgrade
+            </div>
+
+            <div id="inventory"></div>
+        </div>
+
+    <script src="game.js"></script>
+        <script>
+            // Small helper to toggle and populate the simple craftPanel UI
+            (function(){
+                const craftPanel = document.getElementById('craftPanel');
+                const inventory = document.getElementById('inventory');
+                const closeBtn = document.getElementById('closeCraft');
+
+                if(!craftPanel) return;
+
+                document.addEventListener('keydown', function(e){
+                    if(typeof e.key === 'string' && e.key.toLowerCase() === 'c'){
+                        craftPanel.hidden = !craftPanel.hidden;
+                    }
+                });
+
+                if(closeBtn) closeBtn.addEventListener('click', ()=> craftPanel.hidden = true);
+
+                // populate simple inventory grid if empty
+                if(inventory && inventory.children.length === 0){
+                    for(let i=0;i<40;i++){ const slot = document.createElement('div'); slot.className = 'inv-slot'; inventory.appendChild(slot); }
+                }
+
+            })();
+        </script>
+    <script>
+        // Embedded Zephyrax config so the game can run fully offline.
+        window.ZEPHYRAX_CONFIG = {
+            rarities: [
+                {name:'Common',index:0,multiplier:1},
+                {name:'Unusual',index:1,multiplier:1.4},
+                {name:'Rare',index:2,multiplier:1.9},
+                {name:'Epic',index:3,multiplier:2.7},
+                {name:'Legendary',index:4,multiplier:3.8},
+                {name:'Mythical',index:5,multiplier:5.2}
+            ],
+            mobs: [
+                {id:'ladybug',name:'Ladybug',baseHP:50,baseDamage:2,baseRarity:0,biome:'Garden',drops:['Rose','Third Eye']},
+                {id:'bee',name:'Bee',baseHP:80,baseDamage:4,baseRarity:1,biome:'Garden',drops:['Stinger','Pollen']},
+                {id:'hornet',name:'Hornet',baseHP:120,baseDamage:8,baseRarity:2,biome:'Garden',drops:['Missile']},
+                {id:'dandelion',name:'Dandelion',baseHP:30,baseDamage:1,baseRarity:0,biome:'Garden',drops:['Leaf']}
+            ],
+            petals: [
+                {id:'petal_thirdeye',name:'Third Eye',type:'damage',basePower:8},
+                {id:'petal_cactus',name:'Cactus',type:'hp',basePower:100},
+                {id:'petal_rose',name:'Rose',type:'heal',basePower:50}
+            ]
+        };
+
+        // Embedded master design text (shortened) — accessible in settings as reference.
+        window.ZEPHYRAX_SPEC = `Zephyrax.io — Master Design\nRarities, mobs, petals, crafting, waves, PvP, trading... (see project spec)`;
+    </script>
+    <script>
+        // Wire up UI buttons to functions provided by game.js
+        const playBtn = document.getElementById('playBtn');
+        playBtn.addEventListener('click', ()=>{
+            const name = document.getElementById('playerName').value || 'Flower';
+            window.playerName = name;
+            // populate equip slots now that player is starting the game
+            if(typeof populateEquipSlots === 'function') populateEquipSlots();
+            if(window.startGame) window.startGame();
+            document.getElementById('startScreen').style.display='none';
+            // show canvas now that game started
+            document.getElementById('gameCanvas').style.display = 'block';
+        });
+
+        // Quick buttons — use animated, exclusive toggles
+        function closeAllModals(){ ['inventoryModal','craftModal','seenModal','settingsModal'].forEach(id=>{ const m=document.getElementById(id); if(m && m.classList.contains('open')) m.classList.remove('open'); }); }
+        function toggleModalById(id){ const el=document.getElementById(id); if(!el) return; if(el.classList.contains('open')){ el.classList.remove('open'); } else { closeAllModals(); el.classList.add('open');
+                // ensure modal content is rendered when opened
+                if(id === 'craftModal'){ if(window.renderCraft) window.renderCraft(); }
+                else if(id === 'inventoryModal'){ if(window.renderInventory) window.renderInventory(); }
+                else if(id === 'seenModal'){ if(window.renderSeen) window.renderSeen(); }
+            } }
+        document.getElementById('btnInventory').addEventListener('click', ()=> toggleModalById('inventoryModal') );
+        const btnCraft = document.getElementById('btnCraft'); if(btnCraft) btnCraft.addEventListener('click', ()=> toggleModalById('craftModal') );
+        const btnSeen = document.getElementById('btnSeen'); if(btnSeen) btnSeen.addEventListener('click', ()=> toggleModalById('seenModal') );
+        const btnSettings = document.getElementById('btnSettings'); if(btnSettings) btnSettings.addEventListener('click', ()=> toggleModalById('settingsModal') );
+
+        // Close buttons inside modals - use the animated toggles
+        const closeInv = document.getElementById('closeInv'); if(closeInv) closeInv.addEventListener('click', ()=> toggleModalById('inventoryModal') );
+        const closeCraft = document.getElementById('closeCraft'); if(closeCraft) closeCraft.addEventListener('click', ()=> toggleModalById('craftModal') );
+        const closeSeen = document.getElementById('closeSeen'); if(closeSeen) closeSeen.addEventListener('click', ()=> toggleModalById('seenModal') );
+
+        // Search / sort wiring to re-render inventory
+        const invSearch = document.getElementById('invSearch');
+        const invSort = document.getElementById('invSort');
+        if(invSearch) invSearch.addEventListener('input', ()=>{ if(window.renderInventory) window.renderInventory(); });
+        if(invSort) invSort.addEventListener('change', ()=>{ if(window.renderInventory) window.renderInventory(); });
+
+        // settings modal wiring
+        const closeSettings = document.getElementById('closeSettings'); if(closeSettings) closeSettings.addEventListener('click', ()=> toggleModalById('settingsModal') );
+        const movementRadios = Array.from(document.querySelectorAll('input[name="movement"]'));
+        movementRadios.forEach(r=> r.addEventListener('change', ()=>{ if(window.setControlMode) window.setControlMode(r.value); else localStorage.setItem('controlMode', r.value); }));
+        // hitboxes checkbox wiring
+        const hb = document.getElementById('showHitboxes');
+        if(hb) hb.addEventListener('change', ()=>{ if(window.setShowHitboxes) window.setShowHitboxes(hb.checked); else localStorage.setItem('showHitboxes', hb.checked ? '1' : '0'); });
+        // restore saved settings
+        const saved = localStorage.getItem('controlMode'); if(saved){ const sel = document.querySelector(`input[name="movement"][value="${saved}"]`); if(sel) sel.checked=true; if(window.setControlMode) window.setControlMode(saved); }
+        const savedHb = localStorage.getItem('showHitboxes'); if(savedHb && hb){ hb.checked = savedHb === '1'; if(window.setShowHitboxes) window.setShowHitboxes(hb.checked); }
+
+        // Craft button wiring
+        const doCraftBtn = document.getElementById('doCraft');
+        if(doCraftBtn) doCraftBtn.addEventListener('click', ()=>{ if(window.doCraftAction) window.doCraftAction(); else alert('Craft not available'); });
+
+        // Provide these for backward compatibility (they use animated toggles)
+        window.toggleInventory = window.toggleInventory || function(){ toggleModalById('inventoryModal'); };
+        window.toggleCraft = window.toggleCraft || function(){ toggleModalById('craftModal'); };
+        window.toggleSeen = window.toggleSeen || function(){ toggleModalById('seenModal'); };
+
+        // If button images fail to load, show fallback letters
+        function applyButtonFallbacks(){
+            const buttons = document.querySelectorAll('.quick-btn');
+            buttons.forEach(btn=>{
+                const img = btn.querySelector('img');
+                if(!img) return;
+                if(!img.complete || img.naturalWidth === 0){ btn.classList.add('missing'); } else { btn.classList.remove('missing'); }
+                // also listen for load/error
+                img.addEventListener('error', ()=> btn.classList.add('missing'));
+                img.addEventListener('load', ()=> btn.classList.remove('missing'));
+            });
+        }
+        applyButtonFallbacks();
+
+        // Keybinds: X -> Inventory, C -> Craft, V -> Seen. Ignore when typing in inputs.
+        document.addEventListener('keydown', (e) => {
+            const active = document.activeElement;
+            if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) return;
+            const k = (e.key || '').toLowerCase();
+            if (k === 'x') { const b=document.getElementById('btnInventory'); if(b) b.click(); }
+            if (k === 'c') { const b=document.getElementById('btnCraft'); if(b) b.click(); }
+            if (k === 'v') { const b=document.getElementById('btnSeen'); if(b) b.click(); }
+        });
+
+        // Equip slot helpers: generate slots on game start and use delegation for clicks + keybinds
+        function populateEquipSlots(){
+            // Prefer the viewport-anchored hotbar if present, otherwise fall back to legacy mainRow/swapEquip
+            const hotMain = document.getElementById('hotbarMain');
+            const hotSwap = document.getElementById('hotbarSwap');
+            const mainRow = hotMain || document.getElementById('mainRow');
+            const swapRow = hotSwap || document.getElementById('swapEquip');
+            if(!mainRow || !swapRow) return;
+            mainRow.innerHTML = '';
+            swapRow.innerHTML = '';
+            for(let i=1;i<=10;i++){
+                const idx = i;
+                const label = (idx===10)?'0':String(idx);
+                if(hotMain){
+                    const html = document.createElement('div'); html.className = 'hotbar-slot'; html.setAttribute('data-hot', String(idx)); html.draggable = true;
+                    const lbl = document.createElement('span'); lbl.className = 'hot-label'; lbl.textContent = label; html.appendChild(lbl);
+                    mainRow.appendChild(html);
+                } else {
+                    const m = document.createElement('div'); m.className = 'slot'; m.setAttribute('data-slot', String(idx));
+                    const lbl = document.createElement('span'); lbl.className = 'slot-label'; lbl.textContent = label; m.appendChild(lbl);
+                    mainRow.appendChild(m);
+                }
+
+                if(hotSwap){
+                    const s = document.createElement('div'); s.className = 'hotbar-slot'; s.setAttribute('data-hot-swap', String(idx)); s.draggable = true;
+                    const slbl = document.createElement('span'); slbl.className = 'hot-label'; slbl.textContent = label; s.appendChild(slbl);
+                    swapRow.appendChild(s);
+                } else {
+                    const s = document.createElement('div'); s.className = 'slot'; s.setAttribute('data-swap', String(idx));
+                    const slbl = document.createElement('span'); slbl.className = 'slot-label'; slbl.textContent = label; s.appendChild(slbl);
+                    swapRow.appendChild(s);
+                }
+            }
+        }
+
+        (function(){
+            function clearSelection(){
+                document.querySelectorAll('#mainRow .slot.selected, #swapEquip .slot.selected, .hotbar-slot.selected').forEach(s=>s.classList.remove('selected'));
+            }
+            function selectSlot(el){ if(!el) return; clearSelection(); el.classList.add('selected'); try{ el.scrollIntoView({block:'nearest',inline:'nearest',behavior:'smooth'}); }catch(e){} }
+
+            // event delegation for clicks on any known slot type (legacy or hotbar)
+            document.addEventListener('click', function(ev){
+                const slot = ev.target.closest('#mainRow .slot, #swapEquip .slot, .hotbar-slot');
+                if(slot) selectSlot(slot);
+            });
+
+            // keybindings for 1-9 and 0->10. Shift+number targets swap row or swap hotbar.
+            document.addEventListener('keydown', function(ev){
+                const active = document.activeElement;
+                if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) return;
+                let key = ev.key;
+                if(!key) return;
+                let idx = (key === '0') ? 10 : parseInt(key,10);
+                if(!Number.isFinite(idx) || idx < 1 || idx > 10) return;
+
+                // prefer hotbar if present
+                const useHotbar = !!document.getElementById('hotbar');
+                if(useHotbar){
+                    const selector = ev.shiftKey ? `.hotbar-slot[data-hot-swap="${idx}"]` : `.hotbar-slot[data-hot="${idx}"]`;
+                    const el = document.querySelector(selector);
+                    if(el){ ev.preventDefault(); selectSlot(el); }
+                    return;
+                }
+
+                // fallback to legacy slots
+                const targetRow = ev.shiftKey ? '#swapEquip' : '#mainRow';
+                const selector = `${targetRow} .slot[data-slot="${idx}"] , ${targetRow} .slot[data-swap="${idx}"]`;
+                const el = document.querySelector(selector);
+                if(el){ ev.preventDefault(); selectSlot(el); }
+            });
+        })();
+
+        // WebSocket connect helper (non-blocking). Only connects when user requests.
+        (function(){
+            let ws = null;
+            const statusEl = document.getElementById('wsStatus');
+            const btn = document.getElementById('connectServerBtn');
+            if(!btn || !statusEl) return;
+            function setStatus(s, color){ statusEl.textContent = s; statusEl.style.color = color || '#fff'; }
+            btn.addEventListener('click', ()=>{
+                if(ws && ws.readyState === WebSocket.OPEN){ ws.close(); return; }
+                try{
+                    setStatus('connecting...', '#ffd54f');
+                    ws = new WebSocket('ws://localhost:8080');
+                    ws.addEventListener('open', ()=>{ setStatus('connected', '#8ef58e'); btn.textContent = 'Disconnect'; ws.send(JSON.stringify({ type:'hello', name: document.title })); });
+                    ws.addEventListener('message', (ev)=>{ try{ const m = JSON.parse(ev.data); console.log('WS msg', m); }catch(e){} });
+                    ws.addEventListener('close', ()=>{ setStatus('disconnected', '#ff8a80'); btn.textContent = 'Connect Server'; ws = null; });
+                    ws.addEventListener('error', ()=>{ setStatus('error', '#ff8a80'); });
+                }catch(e){ setStatus('error', '#ff8a80'); }
+            });
+        })();
+    </script>
+    <!-- HOTBAR root and builder: appended as last child of <body> to avoid transformed parents -->
+    <script>
+        (function(){
+            // don't recreate if already present
+            if(document.getElementById('HOTBAR_ROOT')) return;
+            const root = document.createElement('div');
+            root.id = 'HOTBAR_ROOT';
+            // append as very last child of body
+            document.body.appendChild(root);
+
+            const makeRow = (count, attr) => Array.from({length:count}).map((_,i)=>{
+                const idx = i+1;
+                const label = (idx===10)?'0':String(idx);
+                return `<div class="hotbar-slot" ${attr}="${idx}"><span class="hot-label">${label}</span></div>`;
+            }).join('');
+
+            root.innerHTML = `
+                <div id="hotbar" aria-hidden="false">
+                    <div class="hotbar-row" id="hotbarMain">${makeRow(10,'data-hot')}</div>
+                    <div class="hotbar-row small" id="hotbarSwap">${makeRow(10,'data-hot-swap')}</div>
+                </div>
+            `;
+
+            // selection helpers
+            function clearHotbarSelection(){ root.querySelectorAll('.hotbar-slot.selected').forEach(s=>s.classList.remove('selected')); }
+            function selectHotbarSlot(el){ if(!el) return; clearHotbarSelection(); el.classList.add('selected'); }
+
+            // click delegation
+            root.addEventListener('click', function(ev){
+                const slot = ev.target.closest('.hotbar-slot');
+                if(!slot) return;
+                selectHotbarSlot(slot);
+            });
+
+            // keyboard bindings mirror existing behavior: 1-9 and 0->10, Shift selects swap row
+            document.addEventListener('keydown', function(ev){
+                const active = document.activeElement;
+                if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) return;
+                let key = ev.key;
+                if(!key) return;
+                let idx = (key === '0') ? 10 : parseInt(key,10);
+                if(!Number.isFinite(idx) || idx < 1 || idx > 10) return;
+                const selector = ev.shiftKey ? `.hotbar-slot[data-hot-swap="${idx}"]` : `.hotbar-slot[data-hot="${idx}"]`;
+                const el = root.querySelector(selector);
+                if(el){ ev.preventDefault(); selectHotbarSlot(el); }
+            });
+
+        })();
+    </script>
+</body>
+</html>
